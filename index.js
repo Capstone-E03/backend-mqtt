@@ -38,13 +38,14 @@ initMqtt((topic, message) => {
   console.log(`📩 MQTT message received | Topic: ${topic} | Message:`, message);
 
   // Forward the message to all connected Socket.IO clients
-  io.emit('mqtt_message', { topic, message });
+  io.emit('sensorData', { topic, message });
 
   // TODO: Save data to PostgreSQL (optional)
   // e.g., insertSensorData(topic, message);
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT ;
 server.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
+  console.log(`Backend running on port ${PORT}`)
 );
+
