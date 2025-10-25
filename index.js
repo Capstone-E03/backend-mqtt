@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Enable CORS and JSON parsing
-app.use(cors());
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json());
 
 // Mount API routes
@@ -19,9 +19,9 @@ app.use('/api', apiRoutes);
 // Initialize Socket.IO for real-time communication
 const io = new Server(server, {
   cors: {
-    origin: '*', // Change this to your frontend URL in production
-    methods: ['GET', 'POST']
-  }
+    origin: process.env.CORS_ORIGIN || '*', // frontend URL in production
+    methods: ['GET', 'POST'],
+  },
 });
 
 // Handle WebSocket connections
@@ -39,7 +39,12 @@ initMqtt((topic, message) => {
 
   // Forward the message to all connected Socket.IO clients
   io.emit('mqtt_message', { topic, message });
+
+  // TODO: Save data to PostgreSQL (optional)
+  // e.g., insertSensorData(topic, message);
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
