@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const apiRoutes = require('./routes/api');
 const { initMqtt } = require('./mqttClient');
 const connectDB = require('./database');
-const Classification = require('./models/Classification');
+const Classification = require('./models/classification');
 
 const app = express();
 const server = http.createServer(app);
