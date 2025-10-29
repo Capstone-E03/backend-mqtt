@@ -1,4 +1,4 @@
-import mqtt from "mqtt";
+const mqtt = require("mqtt");
 
 let client = null;
 
@@ -6,7 +6,7 @@ let client = null;
  * Initializes the MQTT connection and sets up message handling.
  * @param {function} onMessageCallback - Callback function to handle incoming messages
  */
-export function initMqtt(onMessageCallback) {
+function initMqtt(onMessageCallback) {
   const url = process.env.MQTT_URL || "mqtt://localhost:1883";
   const username = process.env.MQTT_USERNAME || undefined;
   const password = process.env.MQTT_PASSWORD || undefined;
@@ -54,7 +54,7 @@ export function initMqtt(onMessageCallback) {
 /**
  * Publishes a message to a topic.
  */
-export function publish(topic, message, options = {}) {
+function publish(topic, message, options = {}) {
   if (!client) throw new Error("MQTT client not initialized");
 
   const payload = typeof message === "string" ? message : JSON.stringify(message);
@@ -67,10 +67,16 @@ export function publish(topic, message, options = {}) {
 /**
  * Subscribes to a new topic dynamically.
  */
-export function subscribe(topic, opts = {}) {
+function subscribe(topic, opts = {}) {
   if (!client) throw new Error("MQTT client not initialized");
   client.subscribe(topic, opts, (err) => {
     if (err) console.error("❌ Subscribe error:", err);
     else console.log(`✅ Subscribed to new topic: ${topic}`);
   });
 }
+
+module.exports = {
+  initMqtt,
+  publish,
+  subscribe,
+};
