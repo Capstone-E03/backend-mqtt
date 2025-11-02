@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const preservationSchema = new mongoose.Schema({
   result: {
     type: String,
-    required: true, 
+    required: true,
   },
   timestamp: {
     type: Date,
