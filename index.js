@@ -21,7 +21,7 @@ function getDeviceKey(topic, message) {
 const app = express();
 const server = http.createServer(app);
 
-let mqttConnectedAt = null;
+let monitoringStartedAt = null;
 
 connectDB();
 
@@ -44,7 +44,7 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log(`🧠 Socket connected: ${socket.id}`);
 
-  socket.emit("mqttStatus", { connectedAt: mqttConnectedAt });
+  socket.emit("mqttStatus", { connectedAt: monitoringStartedAt });
 
   socket.on("disconnect", () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
@@ -54,14 +54,11 @@ io.on("connection", (socket) => {
 // Initialize MQTT connection
 initMqtt({
   onConnect: () => {
-    if (mqttConnectedAt === null) {
-      mqttConnectedAt = new Date();
-    }
-    io.emit("mqttStatus", { connectedAt: mqttConnectedAt });
+    io.emit("mqttStatus", { connectedAt: monitoringStartedAt });
   },
 
   onOffline: () => {
-    mqttConnectedAt = null;
+    monitoringStartedAt = null;
     io.emit("mqttStatus", { connectedAt: null });
   },
 
@@ -70,7 +67,16 @@ initMqtt({
 
     switch (topic) {
       case "stm32/sensor/data": {
+        let isFirstData = false;
+        if (monitoringStartedAt === null) {
+          monitoringStartedAt = new Date();
+          isFirstData = true;
+          console.log(`✅ Monitoring started at: ${monitoringStartedAt}`);
+        }
         io.emit("sensorData", { topic, message });
+        if (isFirstData) {
+          io.emit("mqttStatus", { connectedAt: monitoringStartedAt });
+        }
         break;
       }
 
