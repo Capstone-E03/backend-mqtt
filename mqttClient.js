@@ -6,7 +6,7 @@ let client = null;
  * Initializes the MQTT connection and sets up message handling.
  * @param {function} onMessageCallback - Callback function to handle incoming messages
  */
-function initMqtt(onMessageCallback) {
+function initMqtt(onMessageCallback, onConnect, onOffline) {
   const url = process.env.MQTT_URL || "mqtt://localhost:1883";
   const username = process.env.MQTT_USERNAME || undefined;
   const password = process.env.MQTT_PASSWORD || undefined;
@@ -24,6 +24,7 @@ function initMqtt(onMessageCallback) {
 
   client.on("connect", () => {
     console.log(`🔌 Connected to MQTT broker at ${url}`);
+    if (onConnect) onConnect();
 
     // Subscribe to default topics
     subTopics.forEach((topic) => {
@@ -47,7 +48,12 @@ function initMqtt(onMessageCallback) {
   });
 
   client.on("error", (err) => console.error("⚠️ MQTT Error:", err));
-  client.on("offline", () => console.warn("⚠️ MQTT Offline"));
+
+  client.on("offline", () => {
+    console.warn("⚠️ MQTT Offline");
+    if (onOffline) onOffline();
+  });
+  
   client.on("reconnect", () => console.log("🔁 MQTT Reconnecting..."));
 }
 
