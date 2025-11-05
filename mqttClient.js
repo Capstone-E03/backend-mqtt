@@ -4,9 +4,14 @@ let client = null;
 
 /**
  * Initializes the MQTT connection and sets up message handling.
- * @param {function} onMessageCallback - Callback function to handle incoming messages
+ * @param {object} callbacks - Object containing callback functions
+ * @param {function} callbacks.onMessageCallback - Callback for incoming messages
+ * @param {function} callbacks.onConnect - Callback for connection event
+ * @param {function} callbacks.onOffline - Callback for offline event
  */
-function initMqtt(onMessageCallback, onConnect, onOffline) {
+function initMqtt(callbacks = {}) {
+  const { onMessageCallback, onConnect, onOffline } = callbacks;
+
   const url = process.env.MQTT_URL || "mqtt://localhost:1883";
   const username = process.env.MQTT_USERNAME || undefined;
   const password = process.env.MQTT_PASSWORD || undefined;
@@ -53,7 +58,7 @@ function initMqtt(onMessageCallback, onConnect, onOffline) {
     console.warn("⚠️ MQTT Offline");
     if (onOffline) onOffline();
   });
-  
+
   client.on("reconnect", () => console.log("🔁 MQTT Reconnecting..."));
 }
 
