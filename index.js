@@ -21,6 +21,13 @@ function getDeviceKey(topic, message) {
 const app = express();
 const server = http.createServer(app);
 
+const liveDataCache = {
+  sensor: {},
+  fresh: null,
+  preservation: null,
+  monitoringStartedAt: null, // Akan di-update oleh monitoringStartedAt
+};
+
 let monitoringStartedAt = null;
 
 connectDB();
@@ -28,6 +35,12 @@ connectDB();
 // Enable CORS and JSON parsing
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.use(express.json());
+
+// Middleware untuk meneruskan cache ke API routes
+app.use("/api", (req, res, next) => {
+  req.liveDataCache = liveDataCache;
+  next();
+});
 
 // Mount API routes
 app.use("/api", apiRoutes);
@@ -44,7 +57,7 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log(`🧠 Socket connected: ${socket.id}`);
 
-  socket.emit("mqttStatus", { connectedAt: monitoringStartedAt });
+  socket.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
 
   socket.on("disconnect", () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
@@ -54,11 +67,13 @@ io.on("connection", (socket) => {
 // Initialize MQTT connection
 initMqtt({
   onConnect: () => {
-    io.emit("mqttStatus", { connectedAt: monitoringStartedAt });
+    io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
   },
 
   onOffline: () => {
     monitoringStartedAt = null;
+    liveDataCache.monitoringStartedAt = null;
+    liveDataCache.sensor = {};
     io.emit("mqttStatus", { connectedAt: null });
   },
 
@@ -72,10 +87,12 @@ initMqtt({
           monitoringStartedAt = new Date();
           isFirstData = true;
           console.log(`✅ Monitoring started at: ${monitoringStartedAt}`);
+          liveDataCache.monitoringStartedAt = monitoringStartedAt;
         }
         io.emit("sensorData", { topic, message });
+        Object.assign(liveDataCache.sensor, message);
         if (isFirstData) {
-          io.emit("mqttStatus", { connectedAt: monitoringStartedAt });
+          io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
         }
         break;
       }
@@ -84,6 +101,8 @@ initMqtt({
         // Payload mendukung { fresh: 'KS' } atau { message: { fresh: 'KS' } }
         const fresh = message?.fresh ?? message?.message?.fresh;
         io.emit("freshness", { topic, message }); // tetap broadcast ke FE
+
+        liveDataCache.fresh = fresh; // Simpan ke cache
 
         if (typeof fresh !== "undefined") {
           const devKey = getDeviceKey(topic, message);
@@ -116,6 +135,8 @@ initMqtt({
         const preservation =
           message?.preservation ?? message?.message?.preservation;
         io.emit("preservation", { topic, message }); // tetap broadcast ke FE
+
+        liveDataCache.preservation = preservation; // Simpan ke cache
 
         if (typeof preservation !== "undefined") {
           const devKey = getDeviceKey(topic, message);

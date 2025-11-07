@@ -3,6 +3,7 @@ const router = express.Router();
 const { publish } = require('../mqttClient');
 const Classification = require('../models/classification');
 const Preservation = require('../models/preservation');
+const chatbotService = require('../chatbotService');
 
 // Example test route
 router.get('/', (req, res) => {
@@ -23,6 +24,30 @@ router.post('/publish', (req, res) => {
   } catch (err) {
     console.error('Publish error:', err);
     res.status(500).json({ error: 'Failed to publish message' });
+  }
+});
+
+router.post('/chat', async (req, res) => {
+  // 'message' adalah properti yang dikirim dari frontend ChatBot.js (dari state 'input')
+  const { message } = req.body; 
+  
+  // Ambil cache yang sudah di-attach oleh middleware di index.js
+  const cache = req.liveDataCache; 
+
+  if (!message) {
+    return res.status(400).json({ error: 'Missing message content' });
+  }
+
+  try {
+    // Panggil service untuk mendapatkan respons
+    const responseContent = await chatbotService.getChatResponse(message, cache);
+    
+    // Kirim respons sesuai format yang diharapkan frontend
+    res.json({ role: 'assistant', content: responseContent });
+    
+  } catch (err) {
+    console.error('❌ Chatbot service error:', err);
+    res.status(500).json({ error: 'Failed to get chat response' });
   }
 });
 
