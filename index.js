@@ -8,6 +8,7 @@ const { initMqtt } = require("./mqttClient");
 const connectDB = require("./database");
 const Classification = require("./models/classification");
 const Preservation = require("./models/preservation");
+const { exportToCSV } = require("./csvExportService");
 
 // Cache per device agar hanya save jika berubah
 const lastFreshByDevice = new Map();
@@ -70,7 +71,17 @@ initMqtt({
     io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
   },
 
-  onOffline: () => {
+  onOffline: async () => {
+    console.log("⚠️  [MQTT] STM32 disconnected - triggering auto CSV export...");
+
+    // Auto-export data to CSV when STM32 disconnects
+    try {
+      await exportToCSV("./exports");
+      console.log("✅ [Auto Export] CSV files created successfully");
+    } catch (error) {
+      console.error("❌ [Auto Export] Failed:", error.message);
+    }
+
     monitoringStartedAt = null;
     liveDataCache.monitoringStartedAt = null;
     liveDataCache.sensor = {};
