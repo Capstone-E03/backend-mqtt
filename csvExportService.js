@@ -4,6 +4,41 @@ const Classification = require("./models/classification");
 const Preservation = require("./models/preservation");
 
 /**
+ * Convert UTC timestamp to WIB (Jakarta Time, UTC+7) and format it
+ * @param {Date|string} timestamp - UTC timestamp
+ * @returns {object} { dateStr: "YYYY-MM-DD", timeStr: "HH:MM:SS", fullStr: "YYYY-MM-DD HH:MM:SS" }
+ */
+function toWIB(timestamp) {
+  const date = new Date(timestamp);
+
+  // Convert to WIB by adding 7 hours (25200000 milliseconds)
+  const wibDate = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+
+  // Extract date and time components
+  const year = wibDate.getUTCFullYear();
+  const month = String(wibDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(wibDate.getUTCDate()).padStart(2, '0');
+  const hours = String(wibDate.getUTCHours()).padStart(2, '0');
+  const minutes = String(wibDate.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(wibDate.getUTCSeconds()).padStart(2, '0');
+
+  const dateStr = `${year}-${month}-${day}`;
+  const timeStr = `${hours}:${minutes}:${seconds}`;
+  const fullStr = `${dateStr} ${timeStr}`;
+
+  return { dateStr, timeStr, fullStr };
+}
+
+/**
+ * Get current timestamp in WIB for filename
+ * @returns {string} Format: YYYY-MM-DD_HH-MM-SS
+ */
+function getWIBFilenameTimestamp() {
+  const { dateStr, timeStr } = toWIB(new Date());
+  return `${dateStr}_${timeStr.replace(/:/g, '-')}`;
+}
+
+/**
  * Export classification and preservation data to CSV files
  * @param {string} exportDir - Directory where CSV files will be saved
  * @returns {Promise<{freshnessFile: string, preservationFile: string}>}
@@ -15,12 +50,7 @@ async function exportToCSV(exportDir = "./exports") {
       fs.mkdirSync(exportDir, { recursive: true });
     }
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .split("T")
-      .join("_")
-      .slice(0, -5); // Format: YYYY-MM-DD_HH-MM-SS
+    const timestamp = getWIBFilenameTimestamp(); // Format: YYYY-MM-DD_HH-MM-SS (WIB)
 
     // Export Freshness Data
     const freshnessFile = path.join(
@@ -59,16 +89,14 @@ async function exportFreshnessData(filePath) {
   }
 
   // CSV Header
-  const csvHeader = "No,Timestamp,Classification,Date,Time\n";
+  const csvHeader = "No,Timestamp_WIB,Classification,Date,Time\n";
 
   // CSV Rows
   const csvRows = data
     .map((item, index) => {
-      const date = new Date(item.timestamp);
-      const dateStr = date.toISOString().split("T")[0]; // YYYY-MM-DD
-      const timeStr = date.toISOString().split("T")[1].slice(0, 8); // HH:MM:SS
+      const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
 
-      return `${index + 1},${item.timestamp},${item.result},${dateStr},${timeStr}`;
+      return `${index + 1},${fullStr},${item.result},${dateStr},${timeStr}`;
     })
     .join("\n");
 
@@ -88,16 +116,14 @@ async function exportPreservationData(filePath) {
   }
 
   // CSV Header
-  const csvHeader = "No,Timestamp,Condition,Date,Time\n";
+  const csvHeader = "No,Timestamp_WIB,Condition,Date,Time\n";
 
   // CSV Rows
   const csvRows = data
     .map((item, index) => {
-      const date = new Date(item.timestamp);
-      const dateStr = date.toISOString().split("T")[0]; // YYYY-MM-DD
-      const timeStr = date.toISOString().split("T")[1].slice(0, 8); // HH:MM:SS
+      const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
 
-      return `${index + 1},${item.timestamp},${item.result},${dateStr},${timeStr}`;
+      return `${index + 1},${fullStr},${item.result},${dateStr},${timeStr}`;
     })
     .join("\n");
 
@@ -117,12 +143,7 @@ async function exportDateRange(startDate, endDate, exportDir = "./exports") {
       fs.mkdirSync(exportDir, { recursive: true });
     }
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .split("T")
-      .join("_")
-      .slice(0, -5);
+    const timestamp = getWIBFilenameTimestamp();
 
     // Query with date filter
     const dateFilter = {
@@ -142,13 +163,11 @@ async function exportDateRange(startDate, endDate, exportDir = "./exports") {
         exportDir,
         `freshness_${timestamp}_filtered.csv`
       );
-      const csvHeader = "No,Timestamp,Classification,Date,Time\n";
+      const csvHeader = "No,Timestamp_WIB,Classification,Date,Time\n";
       const csvRows = freshnessData
         .map((item, index) => {
-          const date = new Date(item.timestamp);
-          const dateStr = date.toISOString().split("T")[0];
-          const timeStr = date.toISOString().split("T")[1].slice(0, 8);
-          return `${index + 1},${item.timestamp},${item.result},${dateStr},${timeStr}`;
+          const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
+          return `${index + 1},${fullStr},${item.result},${dateStr},${timeStr}`;
         })
         .join("\n");
       fs.writeFileSync(freshnessFile, csvHeader + csvRows);
@@ -167,13 +186,11 @@ async function exportDateRange(startDate, endDate, exportDir = "./exports") {
         exportDir,
         `preservation_${timestamp}_filtered.csv`
       );
-      const csvHeader = "No,Timestamp,Condition,Date,Time\n";
+      const csvHeader = "No,Timestamp_WIB,Condition,Date,Time\n";
       const csvRows = preservationData
         .map((item, index) => {
-          const date = new Date(item.timestamp);
-          const dateStr = date.toISOString().split("T")[0];
-          const timeStr = date.toISOString().split("T")[1].slice(0, 8);
-          return `${index + 1},${item.timestamp},${item.result},${dateStr},${timeStr}`;
+          const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
+          return `${index + 1},${fullStr},${item.result},${dateStr},${timeStr}`;
         })
         .join("\n");
       fs.writeFileSync(preservationFile, csvHeader + csvRows);
@@ -210,12 +227,7 @@ function exportSensorDataToCSV(sensorDataArray, exportDir = "./exports") {
       return null;
     }
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .split("T")
-      .join("_")
-      .slice(0, -5); // Format: YYYY-MM-DD_HH-MM-SS
+    const timestamp = getWIBFilenameTimestamp(); // Format: YYYY-MM-DD_HH-MM-SS (WIB)
 
     const sensorFile = path.join(
       exportDir,
@@ -223,19 +235,17 @@ function exportSensorDataToCSV(sensorDataArray, exportDir = "./exports") {
     );
 
     // CSV Header
-    const csvHeader = "No,Timestamp,MQ135_PPM,MQ2_PPM,Temperature_C,Humidity_RH,pH,Date,Time\n";
+    const csvHeader = "No,Timestamp_WIB,MQ135_PPM,MQ2_PPM,Temperature_C,Humidity_RH,pH,Date,Time\n";
 
     // CSV Rows
     const csvRows = sensorDataArray
       .map((item, index) => {
-        const date = new Date(item.timestamp);
-        const dateStr = date.toISOString().split("T")[0]; // YYYY-MM-DD
-        const timeStr = date.toISOString().split("T")[1].slice(0, 8); // HH:MM:SS
+        const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
 
         // Handle optional pH field
         const pH = item.pH !== null && item.pH !== undefined ? item.pH : "N/A";
 
-        return `${index + 1},${item.timestamp},${item.mq135_ppm},${item.mq2_ppm},${item.temperature},${item.humidity},${pH},${dateStr},${timeStr}`;
+        return `${index + 1},${fullStr},${item.mq135_ppm},${item.mq2_ppm},${item.temperature},${item.humidity},${pH},${dateStr},${timeStr}`;
       })
       .join("\n");
 
@@ -268,12 +278,7 @@ function exportClassificationHistoryToCSV(classificationArray, exportDir = "./ex
       return null;
     }
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .split("T")
-      .join("_")
-      .slice(0, -5);
+    const timestamp = getWIBFilenameTimestamp();
 
     const classificationFile = path.join(
       exportDir,
@@ -281,17 +286,15 @@ function exportClassificationHistoryToCSV(classificationArray, exportDir = "./ex
     );
 
     // CSV Header
-    const csvHeader = "No,Timestamp,Type,Result,FuzzyValue,Date,Time\n";
+    const csvHeader = "No,Timestamp_WIB,Type,Result,FuzzyValue,Date,Time\n";
 
     // CSV Rows
     const csvRows = classificationArray
       .map((item, index) => {
-        const date = new Date(item.timestamp);
-        const dateStr = date.toISOString().split("T")[0];
-        const timeStr = date.toISOString().split("T")[1].slice(0, 8);
+        const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
         const fuzzyValue = item.value !== null && item.value !== undefined ? item.value.toFixed(2) : "N/A";
 
-        return `${index + 1},${item.timestamp},${item.type},${item.result},${fuzzyValue},${dateStr},${timeStr}`;
+        return `${index + 1},${fullStr},${item.type},${item.result},${fuzzyValue},${dateStr},${timeStr}`;
       })
       .join("\n");
 
@@ -326,12 +329,7 @@ function exportCombinedDataToCSV(sensorDataArray, classificationArray, exportDir
       return null;
     }
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .split("T")
-      .join("_")
-      .slice(0, -5);
+    const timestamp = getWIBFilenameTimestamp();
 
     const combinedFile = path.join(
       exportDir,
@@ -339,7 +337,7 @@ function exportCombinedDataToCSV(sensorDataArray, classificationArray, exportDir
     );
 
     // CSV Header
-    const csvHeader = "No,Timestamp,MQ135_PPM,MQ2_PPM,Temperature_C,Humidity_RH,pH,Freshness,Freshness_Value,Preservation,Preservation_Value,Date,Time\n";
+    const csvHeader = "No,Timestamp_WIB,MQ135_PPM,MQ2_PPM,Temperature_C,Humidity_RH,pH,Freshness,Freshness_Value,Preservation,Preservation_Value,Date,Time\n";
 
     // Create lookup maps for classifications by timestamp
     const freshnessMap = new Map();
@@ -359,13 +357,11 @@ function exportCombinedDataToCSV(sensorDataArray, classificationArray, exportDir
     // CSV Rows
     const csvRows = sensorDataArray
       .map((item, index) => {
-        const date = new Date(item.timestamp);
-        const dateStr = date.toISOString().split("T")[0];
-        const timeStr = date.toISOString().split("T")[1].slice(0, 8);
+        const { dateStr, timeStr, fullStr } = toWIB(item.timestamp);
         const pH = item.pH !== null && item.pH !== undefined ? item.pH : "N/A";
 
         // Find matching classifications (within 1 second tolerance)
-        const sensorTime = date.getTime();
+        const sensorTime = new Date(item.timestamp).getTime();
         let freshness = "N/A";
         let freshnessValue = "N/A";
         let preservation = "N/A";
@@ -388,7 +384,7 @@ function exportCombinedDataToCSV(sensorDataArray, classificationArray, exportDir
           }
         }
 
-        return `${index + 1},${item.timestamp},${item.mq135_ppm},${item.mq2_ppm},${item.temperature},${item.humidity},${pH},${freshness},${freshnessValue},${preservation},${preservationValue},${dateStr},${timeStr}`;
+        return `${index + 1},${fullStr},${item.mq135_ppm},${item.mq2_ppm},${item.temperature},${item.humidity},${pH},${freshness},${freshnessValue},${preservation},${preservationValue},${dateStr},${timeStr}`;
       })
       .join("\n");
 
