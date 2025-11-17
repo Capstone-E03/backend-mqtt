@@ -5,6 +5,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const apiRoutes = require("./routes/api");
 const { initMqtt } = require("./mqttClient");
+const { initSerial } = require("./serialClient");
 const connectDB = require("./database");
 const Classification = require("./models/classification");
 const Preservation = require("./models/preservation");
@@ -73,54 +74,8 @@ io.on("connection", (socket) => {
   });
 });
 
-// Initialize MQTT connection
-initMqtt({
-  onConnect: () => {
-    io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
-  },
-
-  onOffline: async () => {
-    console.log("⚠️  [MQTT] STM32 disconnected - triggering auto CSV export...");
-
-    // Auto-export data to CSV when STM32 disconnects
-    try {
-      // Export classification data (from database)
-      await exportToCSV("./exports");
-      console.log("✅ [Auto Export] Classification CSV files created successfully");
-
-      // Export raw sensor data (from memory)
-      const sensorFile = exportSensorDataToCSV(sensorDataHistory, "./exports");
-      if (sensorFile) {
-        console.log("✅ [Auto Export] Raw sensor data CSV file created successfully");
-      }
-
-      // Export classification history (from memory)
-      const classificationFile = exportClassificationHistoryToCSV(classificationHistory, "./exports");
-      if (classificationFile) {
-        console.log("✅ [Auto Export] Classification history CSV file created successfully");
-      }
-
-      // Export combined data (sensor + classification)
-      const combinedFile = exportCombinedDataToCSV(sensorDataHistory, classificationHistory, "./exports");
-      if (combinedFile) {
-        console.log("✅ [Auto Export] Combined data CSV file created successfully");
-      }
-
-      // Clear histories after export
-      sensorDataHistory.length = 0;
-      classificationHistory.length = 0;
-      console.log("🗑️  [Memory] Sensor data and classification history cleared");
-    } catch (error) {
-      console.error("❌ [Auto Export] Failed:", error.message);
-    }
-
-    monitoringStartedAt = null;
-    liveDataCache.monitoringStartedAt = null;
-    liveDataCache.sensor = {};
-    io.emit("mqttStatus", { connectedAt: null });
-  },
-
-  onMessageCallback: async (topic, message) => {
+// Shared message handler for both MQTT and Serial data
+async function handleIncomingMessage(topic, message) {
     console.log(`📩 MQTT message received | Topic: ${topic} | Message:`, message);
 
     switch (topic) {
@@ -248,8 +203,82 @@ initMqtt({
         console.log("Unknown topic:", topic);
       }
     }
+}
+
+// Auto-export handler when device disconnects
+async function handleDisconnect(source = "Device") {
+  console.log(`⚠️  [${source}] STM32 disconnected - triggering auto CSV export...`);
+
+  // Auto-export data to CSV when STM32 disconnects
+  try {
+    // Export classification data (from database)
+    await exportToCSV("./exports");
+    console.log("✅ [Auto Export] Classification CSV files created successfully");
+
+    // Export raw sensor data (from memory)
+    const sensorFile = exportSensorDataToCSV(sensorDataHistory, "./exports");
+    if (sensorFile) {
+      console.log("✅ [Auto Export] Raw sensor data CSV file created successfully");
+    }
+
+    // Export classification history (from memory)
+    const classificationFile = exportClassificationHistoryToCSV(classificationHistory, "./exports");
+    if (classificationFile) {
+      console.log("✅ [Auto Export] Classification history CSV file created successfully");
+    }
+
+    // Export combined data (sensor + classification)
+    const combinedFile = exportCombinedDataToCSV(sensorDataHistory, classificationHistory, "./exports");
+    if (combinedFile) {
+      console.log("✅ [Auto Export] Combined data CSV file created successfully");
+    }
+
+    // Clear histories after export
+    sensorDataHistory.length = 0;
+    classificationHistory.length = 0;
+    console.log("🗑️  [Memory] Sensor data and classification history cleared");
+  } catch (error) {
+    console.error("❌ [Auto Export] Failed:", error.message);
   }
-});
+
+  monitoringStartedAt = null;
+  liveDataCache.monitoringStartedAt = null;
+  liveDataCache.sensor = {};
+  io.emit("mqttStatus", { connectedAt: null });
+}
+
+// Determine connection mode from environment
+const USE_MQTT = process.env.USE_MQTT !== "false"; // default true
+const USE_SERIAL = process.env.USE_SERIAL === "true"; // default false
+
+console.log(`\n📡 Connection Mode: MQTT=${USE_MQTT}, Serial=${USE_SERIAL}\n`);
+
+// Initialize MQTT connection (if enabled)
+if (USE_MQTT) {
+  initMqtt({
+    onConnect: () => {
+      io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
+    },
+    onOffline: () => handleDisconnect("MQTT"),
+    onMessageCallback: handleIncomingMessage,
+  });
+}
+
+// Initialize Serial connection (if enabled)
+if (USE_SERIAL) {
+  initSerial({
+    onConnect: () => {
+      console.log("✅ [Serial] STM32 connected via serial port");
+      io.emit("mqttStatus", { connectedAt: liveDataCache.monitoringStartedAt });
+    },
+    onDisconnect: () => handleDisconnect("Serial"),
+    onMessageCallback: handleIncomingMessage,
+  });
+}
+
+if (!USE_MQTT && !USE_SERIAL) {
+  console.warn("⚠️  WARNING: Both MQTT and Serial are disabled. No data will be received!");
+}
 
 const PORT = process.env.PORT;
 server.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
